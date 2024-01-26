@@ -190,7 +190,7 @@ async function main() {
 	);
 	if (eventData.opened) return;
 
-	core.info(`eventData: ${JSON.stringify(eventData)}`);
+	core.info(`eventData: ${JSON.stringify(eventData.labels)}`);
 	if (eventData.action === "opened") {
 		diff = await getDiff(
 			prDetails.owner,
