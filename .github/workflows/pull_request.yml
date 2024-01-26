@@ -16,5 +16,5 @@ jobs:
             with:
                 GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                 AI_API_KEY: ${{ secrets.AI_API_KEY }}
-                AI_API_MODEL: "gpt-4"
+                AI_API_MODEL: "gpt-4-1106-preview"
                 exclude: "**/*.json, **/*.md, **/dist/**/*" # Optional: exclude patterns separated by commas
