@@ -67,7 +67,6 @@ async function analyzeCode(
 		if (file.to === "/dev/null") continue; // Ignore deleted files
 		for (const chunk of file.chunks) {
 			const prompt = createPrompt(file, chunk, prDetails);
-			core.debug(`prompt: ${prompt}`);
 			const aiResponse = await getAIResponse(prompt);
 			if (aiResponse) {
 				const newComments = createComment(file, chunk, aiResponse);
@@ -190,7 +189,7 @@ async function main() {
 		readFileSync(process.env.GITHUB_EVENT_PATH ?? "", "utf8")
 	);
 
-	core.info(`eventData: ${eventData}`);
+	core.info(`eventData: ${JSON.stringify(eventData)}`);
 	if (eventData.action === "labeled") {
 		diff = await getDiff(
 			prDetails.owner,
