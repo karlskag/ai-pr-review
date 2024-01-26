@@ -235,7 +235,7 @@ ${mergedDiffs}
 Your task is to summarize changes in a pull requests. Instructions:
 - Provide the full response in following JSON format:  {"summary": "<review comment>"}
 - The response MUST be in a valid JSON format
-- Write the summary in GitHub Markdown format.
+- Write the summary in GitHub Markdown format and stringified for JSON
 - It should be in bullet point format
 - Include important code in the comment as a code block
 - I'm looking for a detailed summary, highlighting key changes in the code, any new features, bug fixes, or major refactors.
