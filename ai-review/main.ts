@@ -59,8 +59,8 @@ async function getDiff(
 async function analyzeCode(
 	parsedDiff: File[],
 	prDetails: PRDetails
-): Promise<Array<{ body: string; path: string; line: number }>> {
-	const comments: Array<{ body: string; path: string; line: number }> = [];
+): Promise<Array<{ body: string; path: string; line?: number }>> {
+	const comments: Array<{ body: string; path: string; line?: number }> = [];
 
 	for (const file of parsedDiff) {
 		if (file.to === "/dev/null") continue; // Ignore deleted files
@@ -121,7 +121,7 @@ function createPrompt(file: File, chunk: Chunk, prDetails: PRDetails): string {
 			// keep default message for now
 		} else if (eventData.label.name === "ai-summary") {
 			message = `Your task is to summarize changes in a pull requests. Instructions:
-				- Provide the response in following JSON format:  {"reviews": [{"lineNumber":  <line_number>, "reviewComment": "<review comment>"}]}
+				- Provide the full response in following JSON format:  {"summary": "<review comment>"}
 				- I'm looking for a detailed summary in the form of a bullet list, highlighting key changes in the code, any new features, bug fixes, or major refactors.
 				- Additionally, include a section on recommended manual testing procedures. This should detail steps to validate that the new changes are working as expected, covering any new features or bug fixes introduced in this pull request.
 				- Finally, based on the changes you've summarized, offer a prediction on the outcome of the review process. Should this pull request be approved based on the changes made, or do the changes warrant further inspection by a human developer? Consider factors like the complexity of changes, potential impact on existing functionality, and adherence to project guidelines in your assessment.
@@ -153,10 +153,11 @@ function createPrompt(file: File, chunk: Chunk, prDetails: PRDetails): string {
 	return message;
 }
 
-async function getAIResponse(prompt: string): Promise<Array<{
-	lineNumber: string;
-	reviewComment: string;
-}> | null> {
+async function getAIResponse(prompt: string): Promise<{ reviews?: Array<{
+		lineNumber: string;
+		reviewComment: string;
+	}>, summary?: string } | null> {
+
 	const queryConfig = {
 		model: AI_API_MODEL,
 		temperature: 0.2,
@@ -188,7 +189,8 @@ async function getAIResponse(prompt: string): Promise<Array<{
 		const parsedResponse = JSON.parse(res)
 		console.log('Parsed response: ', parsedResponse)
 
-		return parsedResponse.reviews;
+		return parsedResponse
+
 	} catch (error) {
 		console.error("Error:", error);
 		return null;
@@ -198,28 +200,40 @@ async function getAIResponse(prompt: string): Promise<Array<{
 function createComment(
 	file: File,
 	chunk: Chunk,
-	aiResponses: Array<{
-		lineNumber: string;
-		reviewComment: string;
-	}>
-): Array<{ body: string; path: string; line: number }> {
-	return aiResponses.flatMap((aiResponse) => {
+	aiResponse: {
+		reviews?: Array<{
+			lineNumber: string;
+			reviewComment: string;
+		}>
+		summary?: string
+	}
+): Array<{ body: string; path: string; line?: number }> | undefined {
+
+	if (aiResponse.reviews) {
+		return aiResponse.reviews.flatMap((aiResponse) => {
+			if (!file.to) {
+				return [];
+			}
+			return {
+				body: aiResponse.reviewComment,
+				path: file.to,
+				line: Number(aiResponse.lineNumber),
+			};
+		});
+	}
+	if (aiResponse.summary) {
 		if (!file.to) {
 			return [];
 		}
-		return {
-			body: aiResponse.reviewComment,
-			path: file.to,
-			line: Number(aiResponse.lineNumber),
-		};
-	});
+		return [{ body: aiResponse.summary, path: file.to }]
+	}
 }
 
 async function createReviewComment(
 	owner: string,
 	repo: string,
 	pull_number: number,
-	comments: Array<{ body: string; path: string; line: number }>
+	comments: Array<{ body: string; path: string; line?: number }>
 ): Promise<void> {
 	await octokit.pulls.createReview({
 		owner,

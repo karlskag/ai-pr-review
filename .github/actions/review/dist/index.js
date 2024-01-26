@@ -142,7 +142,7 @@ function createPrompt(file, chunk, prDetails) {
         }
         else if (eventData.label.name === "ai-summary") {
             message = `Your task is to summarize changes in a pull requests. Instructions:
-				- Provide the response in following JSON format:  {"reviews": [{"lineNumber":  <line_number>, "reviewComment": "<review comment>"}]}
+				- Provide the full response in following JSON format:  {"summary": "<review comment>"}
 				- I'm looking for a detailed summary in the form of a bullet list, highlighting key changes in the code, any new features, bug fixes, or major refactors.
 				- Additionally, include a section on recommended manual testing procedures. This should detail steps to validate that the new changes are working as expected, covering any new features or bug fixes introduced in this pull request.
 				- Finally, based on the changes you've summarized, offer a prediction on the outcome of the review process. Should this pull request be approved based on the changes made, or do the changes warrant further inspection by a human developer? Consider factors like the complexity of changes, potential impact on existing functionality, and adherence to project guidelines in your assessment.
@@ -194,7 +194,7 @@ function getAIResponse(prompt) {
             console.log('Raw response: ', res);
             const parsedResponse = JSON.parse(res);
             console.log('Parsed response: ', parsedResponse);
-            return parsedResponse.reviews;
+            return parsedResponse;
         }
         catch (error) {
             console.error("Error:", error);
@@ -202,17 +202,25 @@ function getAIResponse(prompt) {
         }
     });
 }
-function createComment(file, chunk, aiResponses) {
-    return aiResponses.flatMap((aiResponse) => {
+function createComment(file, chunk, aiResponse) {
+    if (aiResponse.reviews) {
+        return aiResponse.reviews.flatMap((aiResponse) => {
+            if (!file.to) {
+                return [];
+            }
+            return {
+                body: aiResponse.reviewComment,
+                path: file.to,
+                line: Number(aiResponse.lineNumber),
+            };
+        });
+    }
+    if (aiResponse.summary) {
         if (!file.to) {
             return [];
         }
-        return {
-            body: aiResponse.reviewComment,
-            path: file.to,
-            line: Number(aiResponse.lineNumber),
-        };
-    });
+        return [{ body: aiResponse.summary, path: file.to }];
+    }
 }
 function createReviewComment(owner, repo, pull_number, comments) {
     return __awaiter(this, void 0, void 0, function* () {
