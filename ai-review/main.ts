@@ -190,6 +190,7 @@ async function main() {
 		readFileSync(process.env.GITHUB_EVENT_PATH ?? "", "utf8")
 	);
 
+	core.info(`eventData: ${eventData}`);
 	if (eventData.action === "labeled") {
 		diff = await getDiff(
 			prDetails.owner,

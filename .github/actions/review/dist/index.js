@@ -193,6 +193,7 @@ function main() {
         const prDetails = yield getPRDetails();
         let diff;
         const eventData = JSON.parse((0, fs_1.readFileSync)((_a = process.env.GITHUB_EVENT_PATH) !== null && _a !== void 0 ? _a : "", "utf8"));
+        core.info(`eventData: ${eventData}`);
         if (eventData.action === "labeled") {
             diff = yield getDiff(prDetails.owner, prDetails.repo, prDetails.pull_number);
         }
