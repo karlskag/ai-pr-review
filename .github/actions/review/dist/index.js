@@ -105,7 +105,7 @@ function getAIResponse(prompt, system = defaultSystem) {
                     },
                 ] }));
             const res = ((_b = (_a = response.choices[0].message) === null || _a === void 0 ? void 0 : _a.content) === null || _b === void 0 ? void 0 : _b.trim()) || "{}";
-            return JSON.parse(res).reviews;
+            return JSON.parse(res);
         }
         catch (error) {
             console.error("Error:", error);
@@ -170,7 +170,7 @@ ${mergedDiffs}
 `, system);
         if (!aiResponse)
             return [];
-        const comments = createComments(aiResponse);
+        const comments = createComments(aiResponse.reviews);
         core.info(`comments: ${comments}`);
         return comments;
     });

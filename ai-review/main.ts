@@ -83,7 +83,7 @@ async function getAIResponse<T extends Record<string, any>>(
 		});
 
 		const res = response.choices[0].message?.content?.trim() || "{}";
-		return JSON.parse(res).reviews;
+		return JSON.parse(res);
 	} catch (error) {
 		console.error("Error:", error);
 		return null;
@@ -151,11 +151,11 @@ async function analyzeCode(
 ): Promise<Array<{ body: string; path: string; line: number }>> {
 	const mergedDiffs = mergeDiffs(files);
 
-	const aiResponse = await getAIResponse<{
+	const aiResponse = await getAIResponse<{reviews: {
 		path: string;
 		lineNumber: string;
 		reviewComment: string;
-	}[]>(
+	}[]}>(
 		`
 Review the following code diffs and take the pull request title and description into account when writing the response.
 
@@ -174,7 +174,7 @@ ${mergedDiffs}
 
 	if (!aiResponse) return [];
 
-	const comments = createComments(aiResponse as any);
+	const comments = createComments(aiResponse.reviews);
 	core.info(`comments: ${comments}`);
 	return comments;
 }
