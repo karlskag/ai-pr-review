@@ -85,6 +85,7 @@ async function getAIResponse<T extends Record<string, any>>(
 		});
 
 		const res = response.choices[0].message?.content?.trim() || "{}";
+		core.info(`OpenAI response: ${res}`);
 		return JSON.parse(res);
 	} catch (error) {
 		console.error("Error:", error);

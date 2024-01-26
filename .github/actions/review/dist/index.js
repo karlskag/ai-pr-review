@@ -107,6 +107,7 @@ function getAIResponse(prompt, system = defaultSystem) {
                     },
                 ] }));
             const res = ((_b = (_a = response.choices[0].message) === null || _a === void 0 ? void 0 : _a.content) === null || _b === void 0 ? void 0 : _b.trim()) || "{}";
+            core.info(`OpenAI response: ${res}`);
             return JSON.parse(res);
         }
         catch (error) {
