@@ -6,7 +6,7 @@ on:
 
 jobs:
     review:
-        if: ${{ github.event.label.name == 'ai-review' }}
+        if: ${{ github.event.label.name == 'ai-review' || github.event.label.name == 'ai-summary' }}
         runs-on: ubuntu-latest
         steps:
             - name: Checkout Repo

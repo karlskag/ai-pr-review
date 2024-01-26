@@ -9,6 +9,7 @@ import { TOGGLE_ALL } from "../constants";
 export function Main({ todos, dispatch }) {
     const { pathname: route } = useLocation();
 
+	// TODO: should this be renamed?
     const visibleTodos = useMemo(
         () =>
             todos.filter((todo) => {
@@ -29,16 +30,19 @@ export function Main({ todos, dispatch }) {
         <main className="main" data-testid="main">
             {visibleTodos.length > 0 ? (
                 <div className="toggle-all-container">
-                    <input className="toggle-all" type="checkbox" data-testid="toggle-all" checked={visibleTodos.every((todo) => todo.completed)} onChange={toggleAll} />
-                    <label className="toggle-all-label" htmlFor="toggle-all">
-                        Toggle All Input
-                    </label>
+					<span>
+						<input className="toggle-all" type="checkbox" data-testid="toggle-all" checked={visibleTodos.every((todo) => todo.completed)} onChange={toggleAll} />
+                    	<label className="toggle-all-label" htmlFor="toggle-all">
+                        	Toggle All Input
+						</label>
+					</span>
                 </div>
             ) : null}
             <ul className={classnames("todo-list")} data-testid="todo-list">
-                {visibleTodos.map((todo, index) => (
-                    <Item todo={todo} key={todo.id} dispatch={dispatch} index={index} />
-                ))}
+                {visibleTodos.map((todo, index) => {
+					console.log("Oops, this shouldn't be here")
+					return <Item todo={todo} key={todo.id} dispatch={dispatch} index={index}/>
+				})}
             </ul>
         </main>
     );

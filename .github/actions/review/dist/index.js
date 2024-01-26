@@ -106,33 +106,71 @@ function analyzeCode(parsedDiff, prDetails) {
     });
 }
 function createPrompt(file, chunk, prDetails) {
-    return `Your task is to review pull requests. Instructions:
-- Provide the response in following JSON format:  {"reviews": [{"lineNumber":  <line_number>, "reviewComment": "<review comment>"}]}
-- Do not give positive comments or compliments.
-- Provide comments and suggestions ONLY if there is something to improve, otherwise "reviews" should be an empty array.
-- Write the comment in GitHub Markdown format.
-- Use the given description only for the overall context and only comment the code.
-- IMPORTANT: NEVER suggest adding comments to the code.
+    var _a;
+    const defaultMessage = `Your task is to review pull requests. Instructions:
+		- Provide the response in following JSON format:  {"reviews": [{"lineNumber":  <line_number>, "reviewComment": "<review comment>"}]}
+		- Do not give positive comments or compliments.
+		- Provide comments and suggestions ONLY if there is something to improve, otherwise "reviews" should be an empty array.
+		- Write the comment in GitHub Markdown format.
+		- Use the given description only for the overall context and only comment the code.
+		- IMPORTANT: NEVER suggest adding comments to the code.
 
-Review the following code diff in the file "${file.to}" and take the pull request title and description into account when writing the response.
+		Review the following code diff in the file "${file.to}" and take the pull request title and description into account when writing the response.
 
-Pull request title: ${prDetails.title}
-Pull request description:
+		Pull request title: ${prDetails.title}
+		Pull request description:
 
----
-${prDetails.description}
----
+		---
+		${prDetails.description}
+		---
 
-Git diff to review:
+		Git diff to review:
 
-\`\`\`diff
-${chunk.content}
-${chunk.changes
+		\`\`\`diff
+		${chunk.content}
+		${chunk.changes
         // @ts-expect-error - ln and ln2 exists where needed
         .map((c) => `${c.ln ? c.ln : c.ln2} ${c.content}`)
         .join("\n")}
-\`\`\`
-`;
+		\`\`\`
+	`;
+    let message = defaultMessage;
+    const eventData = JSON.parse((0, fs_1.readFileSync)((_a = process.env.GITHUB_EVENT_PATH) !== null && _a !== void 0 ? _a : "", "utf8"));
+    if (eventData.action === "labeled") {
+        if (eventData.label.name === "ai-review") {
+            // keep default message for now
+        }
+        else if (eventData.label.name === "ai-summary") {
+            message = `Your task is to summarize changes in a pull requests. Instructions:
+				- Provide the full response in following JSON format:  {"summary": "<review comment>"}
+				- The response must be one line, but should contain newline characters and other layouts like lists, and headings, to create an easily readable comment. As long as the response is valid JSON.
+				- Write the summary in GitHub Markdown format.
+				- I'm looking for a detailed summary, highlighting key changes in the code, any new features, bug fixes, or major refactors.
+				- Additionally, include a section on recommended manual testing procedures. This should detail steps to validate that the new changes are working as expected, covering any new features or bug fixes introduced in this pull request.
+				- Finally, based on the changes you've summarized, offer a prediction on the outcome of the review process. Should this pull request be approved based on the changes made, or do the changes warrant further inspection by a human developer? Consider factors like the complexity of changes, potential impact on existing functionality, and adherence to project guidelines in your assessment.
+
+				Review the following code diff in the file "${file.to}" and take the pull request title and description into account when writing the response.
+
+				Pull request title: ${prDetails.title}
+				Pull request description:
+
+				---
+				${prDetails.description}
+				---
+
+				Git diff to review:
+
+				\`\`\`diff
+				${chunk.content}
+				${chunk.changes
+                // @ts-expect-error - ln and ln2 exists where needed
+                .map((c) => `${c.ln ? c.ln : c.ln2} ${c.content}`)
+                .join("\n")}
+				\`\`\`
+			`;
+        }
+    }
+    return message;
 }
 function getAIResponse(prompt) {
     var _a, _b;
@@ -155,7 +193,10 @@ function getAIResponse(prompt) {
                     },
                 ] }));
             const res = ((_b = (_a = response.choices[0].message) === null || _a === void 0 ? void 0 : _a.content) === null || _b === void 0 ? void 0 : _b.trim()) || "{}";
-            return JSON.parse(res).reviews;
+            console.log('Raw response: ', res);
+            const parsedResponse = JSON.parse(res);
+            console.log('Parsed response: ', parsedResponse);
+            return parsedResponse;
         }
         catch (error) {
             console.error("Error:", error);
@@ -163,17 +204,25 @@ function getAIResponse(prompt) {
         }
     });
 }
-function createComment(file, chunk, aiResponses) {
-    return aiResponses.flatMap((aiResponse) => {
+function createComment(file, chunk, aiResponse) {
+    if (aiResponse.reviews) {
+        return aiResponse.reviews.flatMap((aiResponse) => {
+            if (!file.to) {
+                return [];
+            }
+            return {
+                body: aiResponse.reviewComment,
+                path: file.to,
+                line: Number(aiResponse.lineNumber),
+            };
+        });
+    }
+    if (aiResponse.summary) {
         if (!file.to) {
             return [];
         }
-        return {
-            body: aiResponse.reviewComment,
-            path: file.to,
-            line: Number(aiResponse.lineNumber),
-        };
-    });
+        return [{ body: aiResponse.summary, path: file.to }];
+    }
 }
 function createReviewComment(owner, repo, pull_number, comments) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -181,7 +230,7 @@ function createReviewComment(owner, repo, pull_number, comments) {
             owner,
             repo,
             pull_number,
-            comments,
+            body: comments[0].body,
             event: "COMMENT",
         });
     });
@@ -228,7 +277,7 @@ function main() {
         const filteredDiff = parsedDiff.filter((file) => {
             return !excludePatterns.some((pattern) => { var _a; return (0, minimatch_1.default)((_a = file.to) !== null && _a !== void 0 ? _a : "", pattern); });
         });
-        const comments = yield analyzeCode(filteredDiff, prDetails);
+        const comments = yield analyzeCode([filteredDiff[0]], prDetails);
         if (comments.length > 0) {
             yield createReviewComment(prDetails.owner, prDetails.repo, prDetails.pull_number, comments);
         }
