@@ -2,10 +2,10 @@ name: PR Review
 
 on:
   pull_request:
+      types: [opened, labeled, synchronize]
 
 jobs:
   review:
-      if: ${{ github.event.label.name == 'ai-review' }}
       runs-on: ubuntu-latest
       steps:
           - name: Checkout Repo
