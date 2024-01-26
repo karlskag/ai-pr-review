@@ -293,8 +293,10 @@ async function main() {
 
 	const labels = eventData.pull_request.labels as { name: string }[];
 
-	if (!labels.some((label) => ["ai-review", "ai-summary"].includes(label.name)))
+	if (!labels.some((label) => ["ai-review", "ai-summary", "ai-naming"].includes(label.name))){
+		core.info(`No supported label set`);
 		return;
+	}
 
 	const parsedDiff = await getParsedDiff(prDetails, eventData);
 	if (!parsedDiff) {
