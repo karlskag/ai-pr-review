@@ -43,7 +43,7 @@ async function getPRDetails(): Promise<PRDetails> {
 }
 
 const defaultSystem = `Your task is to review pull requests. Instructions:
-- Provide the response in following JSON format:  {"reviews": [{"path": <path to file>, "lineNumber":  <line_number>, "reviewComment": "<review comment>"}]}
+- Provide the response in following JSON format:  {"reviews": [{"path": <path_to_file>, "lineNumber":  <line_number>, "reviewComment": "<review comment>"}]}
 - Do not give positive comments or compliments.
 - Provide comments and suggestions ONLY if there is something to improve, otherwise "reviews" should be an empty array.
 - Write the comment in GitHub Markdown format.
@@ -129,7 +129,6 @@ ${chunk.changes
 		.join(`\n\n`);
 }
 
-
 function createComments(
 	aiResponses: Array<{
 		path: string | undefined;
@@ -151,13 +150,13 @@ function createComments(
 
 async function analyzeCode(
 	files: File[],
-	prDetails: PRDetails
+	prDetails: PRDetails,
+	system?: string
 ): Promise<Array<{ body: string; path: string; line: number }>> {
-	const comments: Array<{ body: string; path: string; line: number }> = [];
-
 	const mergedDiffs = mergeDiffs(files);
 
-	const aiResponse = await getAIResponse(`
+	const aiResponse = await getAIResponse(
+		`
 Review the following code diffs and take the pull request title and description into account when writing the response.
 
 Pull request title: ${prDetails.title}
@@ -169,15 +168,14 @@ ${prDetails.description}
 
 File diffs below:
 ${mergedDiffs}
-`);
+`,
+		system
+	);
 
 	if (!aiResponse) return [];
 
-	const newComments = createComments(aiResponse);
-	if (newComments) {
-		comments.push(...newComments);
-	}
-
+	const comments = createComments(aiResponse);
+	core.info(`comments: ${comments}`);
 	return comments;
 }
 
@@ -209,16 +207,32 @@ async function aiReviewAction(prDetails: PRDetails, diff: parseDiff.File[]) {
 }
 
 async function aiNamingAction(prDetails: PRDetails, diff: parseDiff.File[]) {
-	const aiResponse = await getAIResponse(
-		"Hejhej",
-		`Your task is to review pull requests. Instructions:
-	- Provide the response in following JSON format:  {"reviews": [{"lineNumber":  <line_number>, "reviewComment": "<review comment>"}]}
-	- Do not give positive comments or compliments.
-	- Provide comments and suggestions ONLY if there is something to improve, otherwise "reviews" should be an empty array.
-	- Write the comment in GitHub Markdown format.
-	- Use the given description only for the overall context and only comment the code.
-	- IMPORTANT: NEVER suggest adding comments to the code.`
+	const comments = await analyzeCode(
+		diff,
+		prDetails,
+		`
+Your task is to review pull requests. Instructions:
+- Provide the response in following JSON format:  {"reviews": [{"path": <path_to_file>, "lineNumber":  <line_number>, "reviewComment": "<review comment>"}]}
+- Do not give positive comments or compliments.
+- Provide comments and suggestions ONLY if there is something to improve, otherwise "reviews" should be an empty array.
+- Write the comment in GitHub Markdown format.
+- Use the given description only for the overall context and only comment the code.
+- Only give suggestions on naming of functions and variables
+- a suggestion comment can be written with the following syntax:
+\`\`\`suggestion
+<new_code_suggestion>
+\`\`\`
+- IMPORTANT: NEVER suggest adding comments to the code.`
 	);
+
+	if (comments.length > 0) {
+		await createReviewComment(
+			prDetails.owner,
+			prDetails.repo,
+			prDetails.pull_number,
+			comments
+		);
+	}
 }
 
 async function getParsedDiff(
@@ -296,7 +310,7 @@ async function main() {
 				return;
 			}
 			case "ai-naming": {
-				await aiReviewAction(prDetails, parsedDiff);
+				await aiNamingAction(prDetails, parsedDiff);
 				return;
 			}
 			default: {
