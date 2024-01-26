@@ -67,7 +67,7 @@ async function analyzeCode(
 		if (file.to === "/dev/null") continue; // Ignore deleted files
 		for (const chunk of file.chunks) {
 			const prompt = createPrompt(file, chunk, prDetails);
-			core.debug('prompt: ', prompt);
+			core.debug(`prompt: ${prompt}`);
 			const aiResponse = await getAIResponse(prompt);
 			if (aiResponse) {
 				const newComments = createComment(file, chunk, aiResponse);
@@ -184,7 +184,6 @@ async function createReviewComment(
 }
 
 async function main() {
-	core.debug("THIS IS JESPERS DEBUG")
 	const prDetails = await getPRDetails();
 	let diff: string | null;
 	const eventData = JSON.parse(
