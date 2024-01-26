@@ -143,9 +143,9 @@ function createPrompt(file, chunk, prDetails) {
         else if (eventData.label.name === "ai-summary") {
             message = `Your task is to summarize changes in a pull requests. Instructions:
 				- Provide the full response in following JSON format:  {"summary": "<review comment>"}
+				- The response MUST be in a valid JSON format
 				- Write the summary in GitHub Markdown format.
-				- Make sure to use newline characters so that the response can be parsed as JSON.
-				- I'm looking for a detailed summary in the form of a bullet list, highlighting key changes in the code, any new features, bug fixes, or major refactors.
+				- I'm looking for a detailed summary, highlighting key changes in the code, any new features, bug fixes, or major refactors.
 				- Additionally, include a section on recommended manual testing procedures. This should detail steps to validate that the new changes are working as expected, covering any new features or bug fixes introduced in this pull request.
 				- Finally, based on the changes you've summarized, offer a prediction on the outcome of the review process. Should this pull request be approved based on the changes made, or do the changes warrant further inspection by a human developer? Consider factors like the complexity of changes, potential impact on existing functionality, and adherence to project guidelines in your assessment.
 
