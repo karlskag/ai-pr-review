@@ -2,10 +2,7 @@ name: PR Review
 
 on:
     pull_request:
-        types: 
-          - opened
-          - labeled
-          - synchronize
+        types: [opened, labeled, synchronize]
 
 jobs:
     review:
