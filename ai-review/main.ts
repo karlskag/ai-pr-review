@@ -32,6 +32,7 @@ async function getPRDetails(): Promise<PRDetails> {
 		repo: repository.name,
 		pull_number: number,
 	});
+
 	return {
 		owner: repository.owner.login,
 		repo: repository.name,
@@ -183,6 +184,7 @@ async function createReviewComment(
 }
 
 async function main() {
+	core.debug("THIS IS JESPERS DEBUG")
 	const prDetails = await getPRDetails();
 	let diff: string | null;
 	const eventData = JSON.parse(
