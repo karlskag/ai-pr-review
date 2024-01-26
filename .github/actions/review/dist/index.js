@@ -315,19 +315,19 @@ function main() {
             switch (label.name) {
                 case "ai-review": {
                     yield aiReviewAction(prDetails, parsedDiff);
-                    return;
+                    continue;
                 }
                 case "ai-summary": {
                     yield aiSummaryAction(prDetails, parsedDiff);
-                    return;
+                    continue;
                 }
                 case "ai-naming": {
                     yield aiNamingAction(prDetails, parsedDiff);
-                    return;
+                    continue;
                 }
                 default: {
                     core.info(`Unsupported label ${label.name}`);
-                    return;
+                    continue;
                 }
             }
         }

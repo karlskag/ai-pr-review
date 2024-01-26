@@ -360,19 +360,19 @@ async function main() {
 		switch (label.name) {
 			case "ai-review": {
 				await aiReviewAction(prDetails, parsedDiff);
-				return;
+				continue;
 			}
 			case "ai-summary": {
 				await aiSummaryAction(prDetails, parsedDiff);
-				return;
+				continue;
 			}
 			case "ai-naming": {
 				await aiNamingAction(prDetails, parsedDiff);
-				return;
+				continue;
 			}
 			default: {
 				core.info(`Unsupported label ${label.name}`);
-				return;
+				continue;
 			}
 		}
 	}
