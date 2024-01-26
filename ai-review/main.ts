@@ -59,8 +59,8 @@ async function getDiff(
 async function analyzeCode(
 	parsedDiff: File[],
 	prDetails: PRDetails
-): Promise<Array<{ body: string; path: string; line: number }>> {
-	const comments: Array<{ body: string; path: string; line: number }> = [];
+): Promise<Array<{ body: string; path: string; line?: number }>> {
+	const comments: Array<{ body: string; path: string; line?: number }> = [];
 
 	for (const file of parsedDiff) {
 		if (file.to === "/dev/null") continue; // Ignore deleted files
@@ -79,35 +79,78 @@ async function analyzeCode(
 }
 
 function createPrompt(file: File, chunk: Chunk, prDetails: PRDetails): string {
-	return `Your task is to review pull requests. Instructions:
-- Provide the response in following JSON format:  {"reviews": [{"lineNumber":  <line_number>, "reviewComment": "<review comment>"}]}
-- Do not give positive comments or compliments.
-- Provide comments and suggestions ONLY if there is something to improve, otherwise "reviews" should be an empty array.
-- Write the comment in GitHub Markdown format.
-- Use the given description only for the overall context and only comment the code.
-- IMPORTANT: NEVER suggest adding comments to the code.
 
-Review the following code diff in the file "${
-		file.to
-	}" and take the pull request title and description into account when writing the response.
+	const defaultMessage = `Your task is to review pull requests. Instructions:
+		- Provide the response in following JSON format:  {"reviews": [{"lineNumber":  <line_number>, "reviewComment": "<review comment>"}]}
+		- Do not give positive comments or compliments.
+		- Provide comments and suggestions ONLY if there is something to improve, otherwise "reviews" should be an empty array.
+		- Write the comment in GitHub Markdown format.
+		- Use the given description only for the overall context and only comment the code.
+		- IMPORTANT: NEVER suggest adding comments to the code.
 
-Pull request title: ${prDetails.title}
-Pull request description:
+		Review the following code diff in the file "${
+				file.to
+			}" and take the pull request title and description into account when writing the response.
 
----
-${prDetails.description}
----
+		Pull request title: ${prDetails.title}
+		Pull request description:
 
-Git diff to review:
+		---
+		${prDetails.description}
+		---
 
-\`\`\`diff
-${chunk.content}
-${chunk.changes
-		// @ts-expect-error - ln and ln2 exists where needed
-		.map((c) => `${c.ln ? c.ln : c.ln2} ${c.content}`)
-		.join("\n")}
-\`\`\`
-`;
+		Git diff to review:
+
+		\`\`\`diff
+		${chunk.content}
+		${chunk.changes
+				// @ts-expect-error - ln and ln2 exists where needed
+				.map((c) => `${c.ln ? c.ln : c.ln2} ${c.content}`)
+				.join("\n")}
+		\`\`\`
+	`;
+
+	let message = defaultMessage;
+
+	const eventData = JSON.parse(
+		readFileSync(process.env.GITHUB_EVENT_PATH ?? "", "utf8")
+	);
+
+	if (eventData.action === "labeled") {
+		if (eventData.label.name === "ai-review") {
+			// keep default message for now
+		} else if (eventData.label.name === "ai-summary") {
+			message = `Your task is to summarize changes in a pull requests. Instructions:
+				- Provide the response in following JSON format:  {"reviews": [{"reviewComment": "<review comment>"}]}
+				- I'm looking for a detailed summary in the form of a bullet list, highlighting key changes in the code, any new features, bug fixes, or major refactors.
+				- Additionally, include a section on recommended manual testing procedures. This should detail steps to validate that the new changes are working as expected, covering any new features or bug fixes introduced in this pull request.
+				- Finally, based on the changes you've summarized, offer a prediction on the outcome of the review process. Should this pull request be approved based on the changes made, or do the changes warrant further inspection by a human developer? Consider factors like the complexity of changes, potential impact on existing functionality, and adherence to project guidelines in your assessment.
+
+				Review the following code diff in the file "${
+						file.to
+					}" and take the pull request title and description into account when writing the response.
+
+				Pull request title: ${prDetails.title}
+				Pull request description:
+
+				---
+				${prDetails.description}
+				---
+
+				Git diff to review:
+
+				\`\`\`diff
+				${chunk.content}
+				${chunk.changes
+						// @ts-expect-error - ln and ln2 exists where needed
+						.map((c) => `${c.ln ? c.ln : c.ln2} ${c.content}`)
+						.join("\n")}
+				\`\`\`
+			`;
+		}
+	}
+
+	return message;
 }
 
 async function getAIResponse(prompt: string): Promise<Array<{
@@ -150,10 +193,10 @@ function createComment(
 	file: File,
 	chunk: Chunk,
 	aiResponses: Array<{
-		lineNumber: string;
+		lineNumber?: string;
 		reviewComment: string;
 	}>
-): Array<{ body: string; path: string; line: number }> {
+): Array<{ body: string; path: string; line?: number }> {
 	return aiResponses.flatMap((aiResponse) => {
 		if (!file.to) {
 			return [];
@@ -161,7 +204,7 @@ function createComment(
 		return {
 			body: aiResponse.reviewComment,
 			path: file.to,
-			line: Number(aiResponse.lineNumber),
+			...(aiResponse.lineNumber ? {line:  Number(aiResponse.lineNumber)} : {}),
 		};
 	});
 }
@@ -170,7 +213,7 @@ async function createReviewComment(
 	owner: string,
 	repo: string,
 	pull_number: number,
-	comments: Array<{ body: string; path: string; line: number }>
+	comments: Array<{ body: string; path: string; line?: number }>
 ): Promise<void> {
 	await octokit.pulls.createReview({
 		owner,
