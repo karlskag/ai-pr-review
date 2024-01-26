@@ -17,7 +17,7 @@ const hasValidMin = (value, min) => {
     return value.length >= min;
 };
 
-export function Input({ onSubmit, placeholder, label, defaultValue, onBlur }) {
+export function Input({ onSubmit, placeholder, label, defaultValue, onBlur, name = 'todo-input' }) {
     const handleBlur = useCallback(() => {
         if (onBlur)
             onBlur();
@@ -40,8 +40,8 @@ export function Input({ onSubmit, placeholder, label, defaultValue, onBlur }) {
 
     return (
         <div className="input-container">
-            <input className="new-todo" id="todo-input" type="text" data-testid="text-input" autoFocus placeholder={placeholder} defaultValue={defaultValue} onBlur={handleBlur} onKeyDown={handleKeyDown} />
-            <label className="visually-hidden" htmlFor="todo-input">
+            <input className="new-todo" id={name} type="text" data-testid="text-input" autoFocus placeholder={placeholder} defaultValue={defaultValue} onBlur={handleBlur} onKeyDown={handleKeyDown} />
+            <label className="visually-hidden" htmlFor={name}>
                 {label}
             </label>
         </div>

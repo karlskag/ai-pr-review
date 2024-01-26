@@ -211,6 +211,7 @@ Your task is to review pull requests. Instructions:
 \`\`\`suggestion
 <new_code_suggestion>
 \`\`\`
+<comment_to_the_code_suggestion>
 - IMPORTANT: NEVER suggest adding comments to the code.`);
         if (comments.length > 0) {
             yield createReviewComment(prDetails.owner, prDetails.repo, prDetails.pull_number, comments);
@@ -315,19 +316,19 @@ function main() {
             switch (label.name) {
                 case "ai-review": {
                     yield aiReviewAction(prDetails, parsedDiff);
-                    return;
+                    continue;
                 }
                 case "ai-summary": {
                     yield aiSummaryAction(prDetails, parsedDiff);
-                    return;
+                    continue;
                 }
                 case "ai-naming": {
                     yield aiNamingAction(prDetails, parsedDiff);
-                    return;
+                    continue;
                 }
                 default: {
                     core.info(`Unsupported label ${label.name}`);
-                    return;
+                    continue;
                 }
             }
         }

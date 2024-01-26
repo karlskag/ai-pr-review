@@ -225,6 +225,7 @@ Your task is to review pull requests. Instructions:
 \`\`\`suggestion
 <new_code_suggestion>
 \`\`\`
+<comment_to_the_code_suggestion>
 - IMPORTANT: NEVER suggest adding comments to the code.`
 	);
 
@@ -360,19 +361,19 @@ async function main() {
 		switch (label.name) {
 			case "ai-review": {
 				await aiReviewAction(prDetails, parsedDiff);
-				return;
+				continue;
 			}
 			case "ai-summary": {
 				await aiSummaryAction(prDetails, parsedDiff);
-				return;
+				continue;
 			}
 			case "ai-naming": {
 				await aiNamingAction(prDetails, parsedDiff);
-				return;
+				continue;
 			}
 			default: {
 				core.info(`Unsupported label ${label.name}`);
-				return;
+				continue;
 			}
 		}
 	}
