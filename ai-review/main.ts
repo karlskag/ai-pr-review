@@ -303,7 +303,7 @@ async function main() {
 		);
 	});
 
-	const comments = await analyzeCode(filteredDiff, prDetails);
+	const comments = await analyzeCode([filteredDiff[0]], prDetails);
 	if (comments.length > 0) {
 		await createReviewComment(
 			prDetails.owner,
