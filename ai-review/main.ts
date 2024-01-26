@@ -188,6 +188,7 @@ async function main() {
 	const eventData = JSON.parse(
 		readFileSync(process.env.GITHUB_EVENT_PATH ?? "", "utf8")
 	);
+	if (eventData.opened) return;
 
 	core.info(`eventData: ${JSON.stringify(eventData)}`);
 	if (eventData.action === "opened") {
