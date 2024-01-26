@@ -15,8 +15,9 @@
     "learn.json"
   ],
   "scripts": {
-    "build-action": "tsc --project ./tsconfig.json",
-    "package-action": "ncc build ./dist/main.js -o .github/actions/review/dist --license licenses.txt",
+    "action:build": "tsc --project ./tsconfig.json",
+    "action:package": "ncc build ./dist/main.js -o .github/actions/review/dist --license licenses.txt",
+    "action": "npm run action:build && npm run action:package",
     "test-server": "gulp test-server &",
     "server": "gulp test-server",
     "gulp": "gulp",

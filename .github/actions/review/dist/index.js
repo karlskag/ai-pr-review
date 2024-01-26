@@ -73,70 +73,18 @@ function getPRDetails() {
         };
     });
 }
-function getDiff(owner, repo, pull_number) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const response = yield octokit.pulls.get({
-            owner,
-            repo,
-            pull_number,
-            mediaType: { format: "diff" },
-        });
-        // @ts-expect-error - response.data is a string
-        return response.data;
-    });
-}
-function analyzeCode(parsedDiff, prDetails) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const comments = [];
-        for (const file of parsedDiff) {
-            if (file.to === "/dev/null")
-                continue; // Ignore deleted files
-            for (const chunk of file.chunks) {
-                const prompt = createPrompt(file, chunk, prDetails);
-                const aiResponse = yield getAIResponse(prompt);
-                if (aiResponse) {
-                    const newComments = createComment(file, chunk, aiResponse);
-                    if (newComments) {
-                        comments.push(...newComments);
-                    }
-                }
-            }
-        }
-        return comments;
-    });
-}
-function createPrompt(file, chunk, prDetails) {
-    return `Your task is to review pull requests. Instructions:
-- Provide the response in following JSON format:  {"reviews": [{"lineNumber":  <line_number>, "reviewComment": "<review comment>"}]}
+const defaultSystem = `Your task is to review pull requests. Instructions:
+- Provide the response in following JSON format:  {"reviews": [{"path": <path_to_file>, "lineNumber":  <line_number>, "reviewComment": "<review comment>"}]}
 - Do not give positive comments or compliments.
 - Provide comments and suggestions ONLY if there is something to improve, otherwise "reviews" should be an empty array.
 - Write the comment in GitHub Markdown format.
 - Use the given description only for the overall context and only comment the code.
-- IMPORTANT: NEVER suggest adding comments to the code.
-
-Review the following code diff in the file "${file.to}" and take the pull request title and description into account when writing the response.
-
-Pull request title: ${prDetails.title}
-Pull request description:
-
----
-${prDetails.description}
----
-
-Git diff to review:
-
-\`\`\`diff
-${chunk.content}
-${chunk.changes
-        // @ts-expect-error - ln and ln2 exists where needed
-        .map((c) => `${c.ln ? c.ln : c.ln2} ${c.content}`)
-        .join("\n")}
-\`\`\`
-`;
-}
-function getAIResponse(prompt) {
+- IMPORTANT: NEVER suggest adding comments to the code.`;
+function getAIResponse(prompt, system = defaultSystem) {
     var _a, _b;
     return __awaiter(this, void 0, void 0, function* () {
+        core.info(`system: ${system}`);
+        core.info(`prompt: ${prompt}`);
         const queryConfig = {
             model: AI_API_MODEL,
             temperature: 0.2,
@@ -151,11 +99,16 @@ function getAIResponse(prompt) {
                 : {})), { messages: [
                     {
                         role: "system",
+                        content: system,
+                    },
+                    {
+                        role: "user",
                         content: prompt,
                     },
                 ] }));
             const res = ((_b = (_a = response.choices[0].message) === null || _a === void 0 ? void 0 : _a.content) === null || _b === void 0 ? void 0 : _b.trim()) || "{}";
-            return JSON.parse(res).reviews;
+            core.info(`OpenAI response: ${res}`);
+            return JSON.parse(res);
         }
         catch (error) {
             console.error("Error:", error);
@@ -163,16 +116,66 @@ function getAIResponse(prompt) {
         }
     });
 }
-function createComment(file, chunk, aiResponses) {
-    return aiResponses.flatMap((aiResponse) => {
-        if (!file.to) {
+function getDiff(owner, repo, pull_number) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const response = yield octokit.pulls.get({
+            owner,
+            repo,
+            pull_number,
+            mediaType: { format: "diff" },
+        });
+        // @ts-expect-error - response.data is a string
+        return response.data;
+    });
+}
+function mergeDiffs(files) {
+    return files
+        .map((file) => `
+path: ${file.to}
+diff: ${file.chunks.map((chunk) => `
+\`\`\`diff
+${chunk.content}
+${chunk.changes
+        // @ts-expect-error - ln and ln2 exists where needed
+        .map((c) => `${c.ln ? c.ln : c.ln2} ${c.content}`)
+        .join("\n")}
+\`\`\`
+`)}`)
+        .join(`\n\n`);
+}
+function createComments(aiResponses) {
+    return aiResponses.flatMap(({ path, reviewComment, lineNumber }) => {
+        if (!path) {
             return [];
         }
         return {
-            body: aiResponse.reviewComment,
-            path: file.to,
-            line: Number(aiResponse.lineNumber),
+            body: reviewComment,
+            path: path,
+            line: Number(lineNumber),
         };
+    });
+}
+function analyzeCode(files, prDetails, system) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const mergedDiffs = mergeDiffs(files);
+        const aiResponse = yield getAIResponse(`
+Review the following code diffs and take the pull request title and description into account when writing the response.
+
+Pull request title: ${prDetails.title}
+Pull request description:
+
+---
+${prDetails.description}
+---
+
+File diffs below:
+${mergedDiffs}
+`, system);
+        if (!aiResponse)
+            return [];
+        const comments = createComments(aiResponse.reviews);
+        core.info(`comments: ${comments}`);
+        return comments;
     });
 }
 function createReviewComment(owner, repo, pull_number, comments) {
@@ -186,16 +189,78 @@ function createReviewComment(owner, repo, pull_number, comments) {
         });
     });
 }
-function main() {
-    var _a;
+function aiReviewAction(prDetails, diff) {
     return __awaiter(this, void 0, void 0, function* () {
-        const prDetails = yield getPRDetails();
-        let diff;
-        const eventData = JSON.parse((0, fs_1.readFileSync)((_a = process.env.GITHUB_EVENT_PATH) !== null && _a !== void 0 ? _a : "", "utf8"));
-        if (eventData.action === "labeled") {
-            diff = yield getDiff(prDetails.owner, prDetails.repo, prDetails.pull_number);
+        const comments = yield analyzeCode(diff, prDetails);
+        if (comments.length > 0) {
+            yield createReviewComment(prDetails.owner, prDetails.repo, prDetails.pull_number, comments);
         }
-        else if (eventData.action === "opened") {
+    });
+}
+function aiNamingAction(prDetails, diff) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const comments = yield analyzeCode(diff, prDetails, `
+Your task is to review pull requests. Instructions:
+- Provide the response in following JSON format:  {"reviews": [{"path": <path_to_file>, "lineNumber":  <line_number>, "reviewComment": "<review comment>"}]}
+- Do not give positive comments or compliments.
+- Provide comments and suggestions ONLY if there is something to improve, otherwise "reviews" should be an empty array.
+- Write the comment in GitHub Markdown format.
+- Use the given description only for the overall context and only comment the code.
+- Only give suggestions on naming of functions and variables
+- a suggestion comment can be written with the following syntax:
+\`\`\`suggestion
+<new_code_suggestion>
+\`\`\`
+- IMPORTANT: NEVER suggest adding comments to the code.`);
+        if (comments.length > 0) {
+            yield createReviewComment(prDetails.owner, prDetails.repo, prDetails.pull_number, comments);
+        }
+    });
+}
+function aiSummaryAction(prDetails, files) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const mergedDiffs = mergeDiffs(files);
+        const aiResponse = yield getAIResponse(`
+Summarize the following code diffs and take the pull request title and description into account when writing the response.
+
+Pull request title: ${prDetails.title}
+Pull request description:
+
+---
+${prDetails.description}
+---
+
+File diffs below:
+${mergedDiffs}
+`, `
+Your task is to summarize changes in a pull requests. Instructions:
+- Provide the full response in following JSON format:  {"summary": "<review comment>"}
+- The response MUST be in a valid JSON format
+- Write the summary in GitHub Markdown format and stringified for JSON
+- It should be in bullet point format
+- Include important code in the comment as a code block
+- I'm looking for a detailed summary, highlighting key changes in the code, any new features, bug fixes, or major refactors.
+- Additionally, include a section on recommended manual testing procedures. This should detail steps to validate that the new changes are working as expected, covering any new features or bug fixes introduced in this pull request.
+- Finally, based on the changes you've summarized, offer a prediction on the outcome of the review process. Should this pull request be approved based on the changes made, or do the changes warrant further inspection by a human developer? Consider factors like the complexity of changes, potential impact on existing functionality, and adherence to project guidelines in your assessment.
+`);
+        core.info(`This is the summary: ${aiResponse}`);
+        if (!(aiResponse === null || aiResponse === void 0 ? void 0 : aiResponse.summary)) {
+            core.info("Nothing to summarize");
+            return;
+        }
+        yield octokit.pulls.createReview({
+            owner: prDetails.owner,
+            repo: prDetails.repo,
+            pull_number: prDetails.pull_number,
+            body: aiResponse.summary,
+            event: "COMMENT",
+        });
+    });
+}
+function getParsedDiff(prDetails, eventData) {
+    return __awaiter(this, void 0, void 0, function* () {
+        let diff;
+        if (eventData.action === "opened" || eventData.action === "labeled") {
             diff = yield getDiff(prDetails.owner, prDetails.repo, prDetails.pull_number);
         }
         else if (eventData.action === "synchronize") {
@@ -225,12 +290,46 @@ function main() {
             .getInput("exclude")
             .split(",")
             .map((s) => s.trim());
-        const filteredDiff = parsedDiff.filter((file) => {
+        return parsedDiff.filter((file) => {
             return !excludePatterns.some((pattern) => { var _a; return (0, minimatch_1.default)((_a = file.to) !== null && _a !== void 0 ? _a : "", pattern); });
         });
-        const comments = yield analyzeCode(filteredDiff, prDetails);
-        if (comments.length > 0) {
-            yield createReviewComment(prDetails.owner, prDetails.repo, prDetails.pull_number, comments);
+    });
+}
+function main() {
+    var _a;
+    return __awaiter(this, void 0, void 0, function* () {
+        const prDetails = yield getPRDetails();
+        const eventData = JSON.parse((0, fs_1.readFileSync)((_a = process.env.GITHUB_EVENT_PATH) !== null && _a !== void 0 ? _a : "", "utf8"));
+        const labels = eventData.pull_request.labels;
+        if (!labels.some((label) => ["ai-review", "ai-summary", "ai-naming"].includes(label.name))) {
+            core.info(`No supported label set`);
+            return;
+        }
+        const parsedDiff = yield getParsedDiff(prDetails, eventData);
+        if (!parsedDiff) {
+            core.info("No diff to review.");
+            return;
+        }
+        for (const label of labels) {
+            core.info(`Running action for label: ${label.name}`);
+            switch (label.name) {
+                case "ai-review": {
+                    yield aiReviewAction(prDetails, parsedDiff);
+                    return;
+                }
+                case "ai-summary": {
+                    yield aiSummaryAction(prDetails, parsedDiff);
+                    return;
+                }
+                case "ai-naming": {
+                    yield aiNamingAction(prDetails, parsedDiff);
+                    return;
+                }
+                default: {
+                    core.info(`Unsupported label ${label.name}`);
+                    return;
+                }
+            }
         }
     });
 }
