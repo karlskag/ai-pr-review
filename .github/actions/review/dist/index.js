@@ -207,7 +207,7 @@ Your task is to review pull requests. Instructions:
 - Write the comment in GitHub Markdown format.
 - Use the given description only for the overall context and only comment the code.
 - Only give suggestions on naming of functions and variables
-- a suggestion comment can be written with the following syntax:
+- a suggestion comment can be written with the following syntax (Only include code within <new_code_suggestion>, write comment below ticks):
 \`\`\`suggestion
 <new_code_suggestion>
 \`\`\`
