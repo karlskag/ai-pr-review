@@ -207,10 +207,11 @@ Your task is to review pull requests. Instructions:
 - Write the comment in GitHub Markdown format.
 - Use the given description only for the overall context and only comment the code.
 - Only give suggestions on naming of functions and variables
-- a suggestion comment can be written with the following syntax (Only include code within <new_code_suggestion>, write comment below ticks):
+- a suggestion comment can be written with the following syntax:
 \`\`\`suggestion
 <new_code_suggestion>
 \`\`\`
+<comment_to_the_code_suggestion>
 - IMPORTANT: NEVER suggest adding comments to the code.`);
         if (comments.length > 0) {
             yield createReviewComment(prDetails.owner, prDetails.repo, prDetails.pull_number, comments);
