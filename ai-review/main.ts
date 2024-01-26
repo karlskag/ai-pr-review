@@ -182,9 +182,21 @@ async function createReviewComment(
 	});
 }
 
-async function aiReviewAction(prDetails: PRDetails, eventData: Record<string, any>) {
+async function aiReviewAction(prDetails: PRDetails, diff: parseDiff.File[]) {
+	const comments = await analyzeCode(diff, prDetails);
+	if (comments.length > 0) {
+		await createReviewComment(
+			prDetails.owner,
+			prDetails.repo,
+			prDetails.pull_number,
+			comments
+		);
+	}
+}
+
+async function getParsedDiff(prDetails: PRDetails, eventData: Record<string, any>) {
 	let diff: string | null;
-	if (eventData.action === "opened") {
+	if (eventData.action === "opened" || eventData.action === "labeled") {
 		diff = await getDiff(
 			prDetails.owner,
 			prDetails.repo,
@@ -211,7 +223,7 @@ async function aiReviewAction(prDetails: PRDetails, eventData: Record<string, an
 	}
 
 	if (!diff) {
-		console.log("No diff found");
+		console.log("No diff found"); 
 		return;
 	}
 
@@ -222,21 +234,11 @@ async function aiReviewAction(prDetails: PRDetails, eventData: Record<string, an
 		.split(",")
 		.map((s) => s.trim());
 
-	const filteredDiff = parsedDiff.filter((file) => {
+	return parsedDiff.filter((file) => {
 		return !excludePatterns.some((pattern) =>
 			minimatch(file.to ?? "", pattern)
 		);
 	});
-
-	const comments = await analyzeCode(filteredDiff, prDetails);
-	if (comments.length > 0) {
-		await createReviewComment(
-			prDetails.owner,
-			prDetails.repo,
-			prDetails.pull_number,
-			comments
-		);
-	}
 }
 
 async function main() {
@@ -249,14 +251,23 @@ async function main() {
 
 	if (!labels.some(label => ["ai-review", "ai-summary"].includes(label.name))) return;
 
+	const parsedDiff = await getParsedDiff(prDetails, eventData);
+	if (!parsedDiff) {
+		core.info("No diff to review.");
+		return;
+	};
+
 	for (const label of labels) {
 		core.info(`Running action for label: ${label.name}`)
 		switch (label.name){
 			case 'ai-review': {
-				await aiReviewAction(prDetails, eventData)
+				await aiReviewAction(prDetails, parsedDiff);
+				return;
 			}
-			default:
-				core.info(`Unsupported label ${label.name}`)
+			default: {
+				core.info(`Unsupported label ${label.name}`);
+				return;
+			}
 		} 
 	}
 }
