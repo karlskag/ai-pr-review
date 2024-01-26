@@ -73,68 +73,14 @@ function getPRDetails() {
         };
     });
 }
-function getDiff(owner, repo, pull_number) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const response = yield octokit.pulls.get({
-            owner,
-            repo,
-            pull_number,
-            mediaType: { format: "diff" },
-        });
-        // @ts-expect-error - response.data is a string
-        return response.data;
-    });
-}
-function analyzeCode(parsedDiff, prDetails) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const comments = [];
-        for (const file of parsedDiff) {
-            if (file.to === "/dev/null")
-                continue; // Ignore deleted files
-            for (const chunk of file.chunks) {
-                const prompt = createPrompt(file, chunk, prDetails);
-                const aiResponse = yield getAIResponse(prompt);
-                if (aiResponse) {
-                    const newComments = createComment(file, chunk, aiResponse);
-                    if (newComments) {
-                        comments.push(...newComments);
-                    }
-                }
-            }
-        }
-        return comments;
-    });
-}
-function createPrompt(file, chunk, prDetails) {
-    return `Your task is to review pull requests. Instructions:
-- Provide the response in following JSON format:  {"reviews": [{"lineNumber":  <line_number>, "reviewComment": "<review comment>"}]}
+const defaultSystem = `Your task is to review pull requests. Instructions:
+- Provide the response in following JSON format:  {"reviews": [{"path": <path to file>, "lineNumber":  <line_number>, "reviewComment": "<review comment>"}]}
 - Do not give positive comments or compliments.
 - Provide comments and suggestions ONLY if there is something to improve, otherwise "reviews" should be an empty array.
 - Write the comment in GitHub Markdown format.
 - Use the given description only for the overall context and only comment the code.
-- IMPORTANT: NEVER suggest adding comments to the code.
-
-Review the following code diff in the file "${file.to}" and take the pull request title and description into account when writing the response.
-
-Pull request title: ${prDetails.title}
-Pull request description:
-
----
-${prDetails.description}
----
-
-Git diff to review:
-
-\`\`\`diff
-${chunk.content}
-${chunk.changes
-        // @ts-expect-error - ln and ln2 exists where needed
-        .map((c) => `${c.ln ? c.ln : c.ln2} ${c.content}`)
-        .join("\n")}
-\`\`\`
-`;
-}
-function getAIResponse(prompt) {
+- IMPORTANT: NEVER suggest adding comments to the code.`;
+function getAIResponse(prompt, system = defaultSystem) {
     var _a, _b;
     return __awaiter(this, void 0, void 0, function* () {
         const queryConfig = {
@@ -151,6 +97,10 @@ function getAIResponse(prompt) {
                 : {})), { messages: [
                     {
                         role: "system",
+                        content: system,
+                    },
+                    {
+                        role: "user",
                         content: prompt,
                     },
                 ] }));
@@ -163,16 +113,69 @@ function getAIResponse(prompt) {
         }
     });
 }
-function createComment(file, chunk, aiResponses) {
-    return aiResponses.flatMap((aiResponse) => {
-        if (!file.to) {
+function getDiff(owner, repo, pull_number) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const response = yield octokit.pulls.get({
+            owner,
+            repo,
+            pull_number,
+            mediaType: { format: "diff" },
+        });
+        // @ts-expect-error - response.data is a string
+        return response.data;
+    });
+}
+function mergeDiffs(files) {
+    return files
+        .map((file) => `
+path: ${file.to}
+diff: ${file.chunks.map((chunk) => `
+\`\`\`diff
+${chunk.content}
+${chunk.changes
+        // @ts-expect-error - ln and ln2 exists where needed
+        .map((c) => `${c.ln ? c.ln : c.ln2} ${c.content}`)
+        .join("\n")}
+\`\`\`
+`)}`)
+        .join(`\n\n`);
+}
+function createComments(aiResponses) {
+    return aiResponses.flatMap(({ path, reviewComment, lineNumber }) => {
+        if (!path) {
             return [];
         }
         return {
-            body: aiResponse.reviewComment,
-            path: file.to,
-            line: Number(aiResponse.lineNumber),
+            body: reviewComment,
+            path: path,
+            line: Number(lineNumber),
         };
+    });
+}
+function analyzeCode(files, prDetails) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const comments = [];
+        const mergedDiffs = mergeDiffs(files);
+        const aiResponse = yield getAIResponse(`
+Review the following code diffs and take the pull request title and description into account when writing the response.
+
+Pull request title: ${prDetails.title}
+Pull request description:
+
+---
+${prDetails.description}
+---
+
+File diffs below:
+${mergedDiffs}
+`);
+        if (!aiResponse)
+            return [];
+        const newComments = createComments(aiResponse);
+        if (newComments) {
+            comments.push(...newComments);
+        }
+        return comments;
     });
 }
 function createReviewComment(owner, repo, pull_number, comments) {
@@ -192,6 +195,17 @@ function aiReviewAction(prDetails, diff) {
         if (comments.length > 0) {
             yield createReviewComment(prDetails.owner, prDetails.repo, prDetails.pull_number, comments);
         }
+    });
+}
+function aiNamingAction(prDetails, diff) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const aiResponse = yield getAIResponse("Hejhej", `Your task is to review pull requests. Instructions:
+	- Provide the response in following JSON format:  {"reviews": [{"lineNumber":  <line_number>, "reviewComment": "<review comment>"}]}
+	- Do not give positive comments or compliments.
+	- Provide comments and suggestions ONLY if there is something to improve, otherwise "reviews" should be an empty array.
+	- Write the comment in GitHub Markdown format.
+	- Use the given description only for the overall context and only comment the code.
+	- IMPORTANT: NEVER suggest adding comments to the code.`);
     });
 }
 function getParsedDiff(prDetails, eventData) {
@@ -238,18 +252,21 @@ function main() {
         const prDetails = yield getPRDetails();
         const eventData = JSON.parse((0, fs_1.readFileSync)((_a = process.env.GITHUB_EVENT_PATH) !== null && _a !== void 0 ? _a : "", "utf8"));
         const labels = eventData.pull_request.labels;
-        if (!labels.some(label => ["ai-review", "ai-summary"].includes(label.name)))
+        if (!labels.some((label) => ["ai-review", "ai-summary"].includes(label.name)))
             return;
         const parsedDiff = yield getParsedDiff(prDetails, eventData);
         if (!parsedDiff) {
             core.info("No diff to review.");
             return;
         }
-        ;
         for (const label of labels) {
             core.info(`Running action for label: ${label.name}`);
             switch (label.name) {
-                case 'ai-review': {
+                case "ai-review": {
+                    yield aiReviewAction(prDetails, parsedDiff);
+                    return;
+                }
+                case "ai-naming": {
                     yield aiReviewAction(prDetails, parsedDiff);
                     return;
                 }
