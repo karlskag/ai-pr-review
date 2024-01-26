@@ -182,10 +182,13 @@ async function getAIResponse(prompt: string): Promise<Array<{
 		});
 
 		const res = response.choices[0].message?.content?.trim() || "{}";
-		const parsedResponse = JSON.parse(res)
 
+		console.log('Raw response: ', res)
+
+		const parsedResponse = JSON.parse(res)
 		console.log('Parsed response: ', parsedResponse)
-		return JSON.parse(res).reviews;
+
+		return parsedResponse.reviews;
 	} catch (error) {
 		console.error("Error:", error);
 		return null;

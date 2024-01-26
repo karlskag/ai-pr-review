@@ -191,9 +191,10 @@ function getAIResponse(prompt) {
                     },
                 ] }));
             const res = ((_b = (_a = response.choices[0].message) === null || _a === void 0 ? void 0 : _a.content) === null || _b === void 0 ? void 0 : _b.trim()) || "{}";
+            console.log('Raw response: ', res);
             const parsedResponse = JSON.parse(res);
             console.log('Parsed response: ', parsedResponse);
-            return JSON.parse(res).reviews;
+            return parsedResponse.reviews;
         }
         catch (error) {
             console.error("Error:", error);
