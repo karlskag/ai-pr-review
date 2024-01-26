@@ -50,14 +50,10 @@ const defaultSystem = `Your task is to review pull requests. Instructions:
 - Use the given description only for the overall context and only comment the code.
 - IMPORTANT: NEVER suggest adding comments to the code.`;
 
-async function getAIResponse(
+async function getAIResponse<T extends Record<string, any>>(
 	prompt: string,
 	system: string = defaultSystem
-): Promise<Array<{
-	path: string;
-	lineNumber: string;
-	reviewComment: string;
-}> | null> {
+): Promise<T | null> {
 	const queryConfig = {
 		model: AI_API_MODEL,
 		temperature: 0.2,
@@ -155,7 +151,11 @@ async function analyzeCode(
 ): Promise<Array<{ body: string; path: string; line: number }>> {
 	const mergedDiffs = mergeDiffs(files);
 
-	const aiResponse = await getAIResponse(
+	const aiResponse = await getAIResponse<{
+		path: string;
+		lineNumber: string;
+		reviewComment: string;
+	}[]>(
 		`
 Review the following code diffs and take the pull request title and description into account when writing the response.
 
@@ -174,7 +174,7 @@ ${mergedDiffs}
 
 	if (!aiResponse) return [];
 
-	const comments = createComments(aiResponse);
+	const comments = createComments(aiResponse as any);
 	core.info(`comments: ${comments}`);
 	return comments;
 }
@@ -235,6 +235,45 @@ Your task is to review pull requests. Instructions:
 	}
 }
 
+async function aiSummaryAction(prDetails: PRDetails, files: File[]) {
+	const mergedDiffs = mergeDiffs(files);
+
+	const aiResponse = await getAIResponse<{summary: string}>(
+		`
+Review the following code diffs and take the pull request title and description into account when writing the response.
+
+Pull request title: ${prDetails.title}
+Pull request description:
+
+---
+${prDetails.description}
+---
+
+File diffs below:
+${mergedDiffs}
+`,
+		`
+Your task is to summarize changes in a pull requests. Instructions:
+- Provide the full response in following JSON format:  {"summary": "<review comment>"}
+- The response MUST be in a valid JSON format
+- Do not use any linebreaks in the summary, only the newline character
+- Write the summary in GitHub Markdown format.
+- I'm looking for a detailed summary, highlighting key changes in the code, any new features, bug fixes, or major refactors.
+- Additionally, include a section on recommended manual testing procedures. This should detail steps to validate that the new changes are working as expected, covering any new features or bug fixes introduced in this pull request.
+- Finally, based on the changes you've summarized, offer a prediction on the outcome of the review process. Should this pull request be approved based on the changes made, or do the changes warrant further inspection by a human developer? Consider factors like the complexity of changes, potential impact on existing functionality, and adherence to project guidelines in your assessment.
+`
+	);
+
+	if (!aiResponse) return;
+	await octokit.pulls.createReview({
+		owner: prDetails.owner,
+		repo: prDetails.repo,
+		pull_number: prDetails.pull_number,
+		body: aiResponse.summary,
+		event: "COMMENT",
+	});
+}
+
 async function getParsedDiff(
 	prDetails: PRDetails,
 	eventData: Record<string, any>
@@ -293,7 +332,11 @@ async function main() {
 
 	const labels = eventData.pull_request.labels as { name: string }[];
 
-	if (!labels.some((label) => ["ai-review", "ai-summary", "ai-naming"].includes(label.name))){
+	if (
+		!labels.some((label) =>
+			["ai-review", "ai-summary", "ai-naming"].includes(label.name)
+		)
+	) {
 		core.info(`No supported label set`);
 		return;
 	}
@@ -309,6 +352,10 @@ async function main() {
 		switch (label.name) {
 			case "ai-review": {
 				await aiReviewAction(prDetails, parsedDiff);
+				return;
+			}
+			case "ai-summary": {
+				await aiSummaryAction(prDetails, parsedDiff);
 				return;
 			}
 			case "ai-naming": {

@@ -214,6 +214,42 @@ Your task is to review pull requests. Instructions:
         }
     });
 }
+function aiSummaryAction(prDetails, files) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const mergedDiffs = mergeDiffs(files);
+        const aiResponse = yield getAIResponse(`
+Review the following code diffs and take the pull request title and description into account when writing the response.
+
+Pull request title: ${prDetails.title}
+Pull request description:
+
+---
+${prDetails.description}
+---
+
+File diffs below:
+${mergedDiffs}
+`, `
+Your task is to summarize changes in a pull requests. Instructions:
+- Provide the full response in following JSON format:  {"summary": "<review comment>"}
+- The response MUST be in a valid JSON format
+- Do not use any linebreaks in the summary, only the newline character
+- Write the summary in GitHub Markdown format.
+- I'm looking for a detailed summary, highlighting key changes in the code, any new features, bug fixes, or major refactors.
+- Additionally, include a section on recommended manual testing procedures. This should detail steps to validate that the new changes are working as expected, covering any new features or bug fixes introduced in this pull request.
+- Finally, based on the changes you've summarized, offer a prediction on the outcome of the review process. Should this pull request be approved based on the changes made, or do the changes warrant further inspection by a human developer? Consider factors like the complexity of changes, potential impact on existing functionality, and adherence to project guidelines in your assessment.
+`);
+        if (!aiResponse)
+            return;
+        yield octokit.pulls.createReview({
+            owner: prDetails.owner,
+            repo: prDetails.repo,
+            pull_number: prDetails.pull_number,
+            body: aiResponse.summary,
+            event: "COMMENT",
+        });
+    });
+}
 function getParsedDiff(prDetails, eventData) {
     return __awaiter(this, void 0, void 0, function* () {
         let diff;
@@ -272,6 +308,10 @@ function main() {
             switch (label.name) {
                 case "ai-review": {
                     yield aiReviewAction(prDetails, parsedDiff);
+                    return;
+                }
+                case "ai-summary": {
+                    yield aiSummaryAction(prDetails, parsedDiff);
                     return;
                 }
                 case "ai-naming": {
