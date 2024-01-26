@@ -267,7 +267,10 @@ Your task is to summarize changes in a pull requests. Instructions:
 `
 	);
 	core.info(`This is the summary: ${aiResponse}`);
-	if (!aiResponse) return;
+	if (!aiResponse?.summary) {
+		core.info("Nothing to summarize");
+		return;
+	} 
 	
 	await octokit.pulls.createReview({
 		owner: prDetails.owner,

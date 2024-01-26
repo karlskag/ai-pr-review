@@ -243,8 +243,10 @@ Your task is to summarize changes in a pull requests. Instructions:
 - Finally, based on the changes you've summarized, offer a prediction on the outcome of the review process. Should this pull request be approved based on the changes made, or do the changes warrant further inspection by a human developer? Consider factors like the complexity of changes, potential impact on existing functionality, and adherence to project guidelines in your assessment.
 `);
         core.info(`This is the summary: ${aiResponse}`);
-        if (!aiResponse)
+        if (!(aiResponse === null || aiResponse === void 0 ? void 0 : aiResponse.summary)) {
+            core.info("Nothing to summarize");
             return;
+        }
         yield octokit.pulls.createReview({
             owner: prDetails.owner,
             repo: prDetails.repo,
