@@ -245,7 +245,7 @@ async function main() {
 		readFileSync(process.env.GITHUB_EVENT_PATH ?? "", "utf8")
 	);
 
-	const labels = eventData.pull_requests.labels as { name: string }[];
+	const labels = eventData.pull_request.labels as { name: string }[];
 
 	if (!labels.some(label => ["ai-review", "ai-summary"].includes(label.name))) return;
 

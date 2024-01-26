@@ -233,7 +233,7 @@ function main() {
     return __awaiter(this, void 0, void 0, function* () {
         const prDetails = yield getPRDetails();
         const eventData = JSON.parse((0, fs_1.readFileSync)((_a = process.env.GITHUB_EVENT_PATH) !== null && _a !== void 0 ? _a : "", "utf8"));
-        const labels = eventData.pull_requests.labels;
+        const labels = eventData.pull_request.labels;
         if (!labels.some(label => ["ai-review", "ai-summary"].includes(label.name)))
             return;
         for (const label of labels) {
