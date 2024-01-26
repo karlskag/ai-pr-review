@@ -186,10 +186,18 @@ function createReviewComment(owner, repo, pull_number, comments) {
         });
     });
 }
-function aiReviewAction(prDetails, eventData) {
+function aiReviewAction(prDetails, diff) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const comments = yield analyzeCode(diff, prDetails);
+        if (comments.length > 0) {
+            yield createReviewComment(prDetails.owner, prDetails.repo, prDetails.pull_number, comments);
+        }
+    });
+}
+function getParsedDiff(prDetails, eventData) {
     return __awaiter(this, void 0, void 0, function* () {
         let diff;
-        if (eventData.action === "opened") {
+        if (eventData.action === "opened" || eventData.action === "labeled") {
             diff = yield getDiff(prDetails.owner, prDetails.repo, prDetails.pull_number);
         }
         else if (eventData.action === "synchronize") {
@@ -219,13 +227,9 @@ function aiReviewAction(prDetails, eventData) {
             .getInput("exclude")
             .split(",")
             .map((s) => s.trim());
-        const filteredDiff = parsedDiff.filter((file) => {
+        return parsedDiff.filter((file) => {
             return !excludePatterns.some((pattern) => { var _a; return (0, minimatch_1.default)((_a = file.to) !== null && _a !== void 0 ? _a : "", pattern); });
         });
-        const comments = yield analyzeCode(filteredDiff, prDetails);
-        if (comments.length > 0) {
-            yield createReviewComment(prDetails.owner, prDetails.repo, prDetails.pull_number, comments);
-        }
     });
 }
 function main() {
@@ -236,14 +240,23 @@ function main() {
         const labels = eventData.pull_request.labels;
         if (!labels.some(label => ["ai-review", "ai-summary"].includes(label.name)))
             return;
+        const parsedDiff = yield getParsedDiff(prDetails, eventData);
+        if (!parsedDiff) {
+            core.info("No diff to review.");
+            return;
+        }
+        ;
         for (const label of labels) {
             core.info(`Running action for label: ${label.name}`);
             switch (label.name) {
                 case 'ai-review': {
-                    yield aiReviewAction(prDetails, eventData);
+                    yield aiReviewAction(prDetails, parsedDiff);
+                    return;
                 }
-                default:
+                default: {
                     core.info(`Unsupported label ${label.name}`);
+                    return;
+                }
             }
         }
     });
