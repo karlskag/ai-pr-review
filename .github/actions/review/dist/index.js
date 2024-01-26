@@ -83,6 +83,8 @@ const defaultSystem = `Your task is to review pull requests. Instructions:
 function getAIResponse(prompt, system = defaultSystem) {
     var _a, _b;
     return __awaiter(this, void 0, void 0, function* () {
+        core.info(`system: ${system}`);
+        core.info(`prompt: ${prompt}`);
         const queryConfig = {
             model: AI_API_MODEL,
             temperature: 0.2,
@@ -233,8 +235,9 @@ ${mergedDiffs}
 Your task is to summarize changes in a pull requests. Instructions:
 - Provide the full response in following JSON format:  {"summary": "<review comment>"}
 - The response MUST be in a valid JSON format
-- Do not use any linebreaks in the summary, only the newline character
 - Write the summary in GitHub Markdown format.
+- It should be in bullet point format
+- Include important code in the comment as a code block
 - I'm looking for a detailed summary, highlighting key changes in the code, any new features, bug fixes, or major refactors.
 - Additionally, include a section on recommended manual testing procedures. This should detail steps to validate that the new changes are working as expected, covering any new features or bug fixes introduced in this pull request.
 - Finally, based on the changes you've summarized, offer a prediction on the outcome of the review process. Should this pull request be approved based on the changes made, or do the changes warrant further inspection by a human developer? Consider factors like the complexity of changes, potential impact on existing functionality, and adherence to project guidelines in your assessment.
