@@ -242,7 +242,7 @@ async function createReviewComment(
 		owner,
 		repo,
 		pull_number,
-		comments,
+		body: comments[0].body,
 		event: "COMMENT",
 	});
 }
