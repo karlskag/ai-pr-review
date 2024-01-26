@@ -218,7 +218,7 @@ function aiSummaryAction(prDetails, files) {
     return __awaiter(this, void 0, void 0, function* () {
         const mergedDiffs = mergeDiffs(files);
         const aiResponse = yield getAIResponse(`
-Review the following code diffs and take the pull request title and description into account when writing the response.
+Summarize the following code diffs and take the pull request title and description into account when writing the response.
 
 Pull request title: ${prDetails.title}
 Pull request description:
@@ -239,6 +239,7 @@ Your task is to summarize changes in a pull requests. Instructions:
 - Additionally, include a section on recommended manual testing procedures. This should detail steps to validate that the new changes are working as expected, covering any new features or bug fixes introduced in this pull request.
 - Finally, based on the changes you've summarized, offer a prediction on the outcome of the review process. Should this pull request be approved based on the changes made, or do the changes warrant further inspection by a human developer? Consider factors like the complexity of changes, potential impact on existing functionality, and adherence to project guidelines in your assessment.
 `);
+        core.info(`This is the summary: ${aiResponse}`);
         if (!aiResponse)
             return;
         yield octokit.pulls.createReview({

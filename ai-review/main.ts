@@ -240,7 +240,7 @@ async function aiSummaryAction(prDetails: PRDetails, files: File[]) {
 
 	const aiResponse = await getAIResponse<{summary: string}>(
 		`
-Review the following code diffs and take the pull request title and description into account when writing the response.
+Summarize the following code diffs and take the pull request title and description into account when writing the response.
 
 Pull request title: ${prDetails.title}
 Pull request description:
@@ -263,8 +263,9 @@ Your task is to summarize changes in a pull requests. Instructions:
 - Finally, based on the changes you've summarized, offer a prediction on the outcome of the review process. Should this pull request be approved based on the changes made, or do the changes warrant further inspection by a human developer? Consider factors like the complexity of changes, potential impact on existing functionality, and adherence to project guidelines in your assessment.
 `
 	);
-
+	core.info(`This is the summary: ${aiResponse}`);
 	if (!aiResponse) return;
+	
 	await octokit.pulls.createReview({
 		owner: prDetails.owner,
 		repo: prDetails.repo,
