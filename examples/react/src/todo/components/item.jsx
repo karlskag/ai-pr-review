@@ -21,7 +21,7 @@ export const Item = memo(function Item({ todo, dispatch, index }) {
         setIsWritable(false);
     }, []);
 
-    const handleUpdate = useCallback(
+    const thisCouldUseABetterName = useCallback(
         (title) => {
             if (title.length === 0)
                 removeItem(id);
@@ -37,7 +37,7 @@ export const Item = memo(function Item({ todo, dispatch, index }) {
         <li className={classnames({ completed: todo.completed })} data-testid="todo-item">
             <div className="view">
                 {isWritable ? (
-                    <Input onSubmit={handleUpdate} label="Edit Todo Input" defaultValue={title} onBlur={handleBlur} />
+                    <Input onSubmit={thisCouldUseABetterName} label="Edit Todo Input" defaultValue={title} onBlur={handleBlur} />
                 ) : (
                     <>
                         <input className="toggle" type="checkbox" data-testid="todo-item-toggle" checked={completed} onChange={toggleItem} />
