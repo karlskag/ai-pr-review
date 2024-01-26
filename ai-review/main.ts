@@ -104,9 +104,9 @@ Git diff to review:
 \`\`\`diff
 ${chunk.content}
 ${chunk.changes
-		// @ts-expect-error - ln and ln2 exists where needed
-		.map((c) => `${c.ln ? c.ln : c.ln2} ${c.content}`)
-		.join("\n")}
+	// @ts-expect-error - ln and ln2 exists where needed
+	.map((c) => `${c.ln ? c.ln : c.ln2} ${c.content}`)
+	.join("\n")}
 \`\`\`
 `;
 }
@@ -182,15 +182,8 @@ async function createReviewComment(
 	});
 }
 
-async function main() {
-	const prDetails = await getPRDetails();
+async function aiReviewAction(prDetails: PRDetails, eventData: Record<string, any>) {
 	let diff: string | null;
-	const eventData = JSON.parse(
-		readFileSync(process.env.GITHUB_EVENT_PATH ?? "", "utf8")
-	);
-	if (eventData.opened) return;
-
-	core.info(`eventData: ${JSON.stringify(eventData.labels)}`);
 	if (eventData.action === "opened") {
 		diff = await getDiff(
 			prDetails.owner,
@@ -243,6 +236,28 @@ async function main() {
 			prDetails.pull_number,
 			comments
 		);
+	}
+}
+
+async function main() {
+	const prDetails = await getPRDetails();
+	const eventData = JSON.parse(
+		readFileSync(process.env.GITHUB_EVENT_PATH ?? "", "utf8")
+	);
+
+	const labels = eventData.pull_requests.labels as { name: string }[];
+
+	if (!labels.some(label => ["ai-review", "ai-summary"].includes(label.name))) return;
+
+	for (const label of labels) {
+		core.info(`Running action for label: ${label.name}`)
+		switch (label.name){
+			case 'ai-review': {
+				await aiReviewAction(prDetails, eventData)
+			}
+			default:
+				core.info(`Unsupported label ${label.name}`)
+		} 
 	}
 }
 

@@ -186,15 +186,9 @@ function createReviewComment(owner, repo, pull_number, comments) {
         });
     });
 }
-function main() {
-    var _a;
+function aiReviewAction(prDetails, eventData) {
     return __awaiter(this, void 0, void 0, function* () {
-        const prDetails = yield getPRDetails();
         let diff;
-        const eventData = JSON.parse((0, fs_1.readFileSync)((_a = process.env.GITHUB_EVENT_PATH) !== null && _a !== void 0 ? _a : "", "utf8"));
-        if (eventData.opened)
-            return;
-        core.info(`eventData: ${JSON.stringify(eventData.labels)}`);
         if (eventData.action === "opened") {
             diff = yield getDiff(prDetails.owner, prDetails.repo, prDetails.pull_number);
         }
@@ -231,6 +225,26 @@ function main() {
         const comments = yield analyzeCode(filteredDiff, prDetails);
         if (comments.length > 0) {
             yield createReviewComment(prDetails.owner, prDetails.repo, prDetails.pull_number, comments);
+        }
+    });
+}
+function main() {
+    var _a;
+    return __awaiter(this, void 0, void 0, function* () {
+        const prDetails = yield getPRDetails();
+        const eventData = JSON.parse((0, fs_1.readFileSync)((_a = process.env.GITHUB_EVENT_PATH) !== null && _a !== void 0 ? _a : "", "utf8"));
+        const labels = eventData.pull_requests.labels;
+        if (!labels.some(label => ["ai-review", "ai-summary"].includes(label.name)))
+            return;
+        for (const label of labels) {
+            core.info(`Running action for label: ${label.name}`);
+            switch (label.name) {
+                case 'ai-review': {
+                    yield aiReviewAction(prDetails, eventData);
+                }
+                default:
+                    core.info(`Unsupported label ${label.name}`);
+            }
         }
     });
 }
